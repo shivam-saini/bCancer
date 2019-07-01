@@ -1,0 +1,181 @@
+---
+title: "Breat Cancer Predictor"
+author: "Shivam Saini"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(caret)
+library(e1071)
+
+```
+
+Let's read the data.
+```{r}
+cancer<- read_csv("data.csv")
+```
+```{r}
+head(cancer)
+```
+```{r}
+#remove the "id" and last(empty) column
+
+cancer<- cancer[-c(1,33)]
+
+#fix names
+names(cancer) <- str_replace(names(cancer), " ", "_")
+
+#convert diagonosis to factor
+cancer$diagnosis<- as.factor(cancer$diagnosis)
+```
+
+
+```{r}
+cat("Proportion of Malignant(cancerous) v/s Benign tumors")
+
+table(cancer$diagnosis) %>%prop.table
+```
+
+The data is fairly balanced.
+
+Let's create training and test sets.
+
+```{r}
+index<- createDataPartition(cancer$diagnosis, p= 0.7, list = FALSE)
+test<- cancer[-index,] ##holdout
+training<- cancer[index,]
+```
+
+
+
+
+There are many variables in the data set so I am going to take 10 at a time for analysis
+
+. 
+```{r, fig.height=10, fig.width=10}
+training%>%
+    select(1: 11) %>%
+    gather(key= variable , value= val, 2:11) %>%
+    ggplot(aes(x= val)) + 
+    geom_density(aes(fill= diagnosis), alpha=0.5) + 
+    facet_wrap(~ variable, scales="free", ncol =3 )
+
+```
+
+* Here I am going to select only those characteristics where Malign and Benign tumor distributions are distinctively visible.
+
+* Also radius_mean, perimeter_mean, and area_mean are collinear hence i am only going to use the area_mean for modelling.
+
+```{r,  fig.height=10, fig.width=10}
+f.remove<- c("texture_mean", "symmetry_mean","smoothness_mean", "fractal_dimension_mean", "radius_mean", "perimeter_mean")
+
+training %>%
+    select(1,12: 21) %>%
+    gather(key= variable , value= val, 2:11) %>%
+    ggplot(aes(x= val)) + 
+    geom_density(aes(fill= diagnosis), alpha= 0.5) + 
+    facet_wrap(~ variable, scales="free", ncol =3 )
+```
+
+```{r}
+f.remove<- c(f.remove, "texture_se", "smoothness_se", "symmetry_se", "fractal_dimension_se", "concavity_se", "concave_points_se", "radius_se", "perimeter_se", "area_se")
+```
+
+```{r, fig.height=10, fig.width=10}
+training%>%
+    select(1,22: 31) %>%
+    gather(key= variable , value= val, 2:11) %>%
+    ggplot(aes(x=val)) + 
+    geom_density(aes(fill= diagnosis), alpha=0.5) + 
+    facet_wrap(~ variable, scales="free", ncol =3)
+
+```
+
+
+```{r}
+f.remove<- c(f.remove, "smoothness_worst", "symmetry_worst", "texture_worst", "radius_worst", "perimeter_worst")
+```
+
+
+Remove the unnecessary variables.
+```{r}
+training<- training[setdiff(names(training), f.remove)]
+test<- test[setdiff(names(test), f.remove)]
+
+```
+
+
+Let's see if any of the remaining features are correlated.
+
+```{r}
+corrplot::corrplot.mixed(cor(training[-1]))
+```
+
+Removing most of the correlated features.
+
+```{r}
+f.rem<- c("area_worst", "concave points_mean", "compactness_mean", "concavity_mean", "compactness_worst")
+training<- training[setdiff(names(training), f.rem)]
+test<- test[setdiff(names(test), f.rem)]
+```
+
+Let's take a final look at our features
+
+```{r, fig.width=10, fig.height=10}
+GGally::ggpairs(training, aes_string(fill= "diagnosis", color= "diagnosis"))
+```
+
+Lets' train our svm on area_mean and concave_points_worst
+
+```{r}
+m1<- svm(diagnosis~area_mean+concave_points_worst, data = training, kernel='linear', cost=1)
+
+plot(m1, training, area_mean~concave_points_worst)
+```
+
+```{r}
+confusionMatrix(predict(m1, test), test$diagnosis, positive = "M")
+```
+Tune the model.
+```{r}
+
+m2<-tune(svm,diagnosis~area_mean+concave_points_worst, data= training, kernel='linear', ranges= list(cost=c(0.1,1,10,100,1000)))
+
+b_mod<- m2$best.model
+
+
+```
+
+
+```{r}
+summary(b_mod)
+
+cat("---------------------------------\n")
+confusionMatrix(predict(b_mod, test), test$diagnosis, positive="M")
+```
+
+For diagnostic tests false-negative rate must be minimized over false-positive rate but this model gives sufficient accuracy  and sensitivity so no more tuning is needed. 
+
+Let's calculate the cross-validation score to get a better practical accuracy.
+
+```{r}
+
+k_train<- train(diagnosis~area_mean+concave_points_worst, data=cancer, trControl= trainControl(method='cv', n=5), 
+                method='svmLinear',
+                tuneGrid= expand.grid(C=1)
+                )
+
+
+confusionMatrix(k_train, positive="M")
+```
+
+
+
+
+
+
+
+
