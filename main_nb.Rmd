@@ -159,7 +159,27 @@ confusionMatrix(predict(b_mod, test), test$diagnosis, positive="M")
 
 For diagnostic tests false-negative rate must be minimized over false-positive rate but this model gives sufficient accuracy  and sensitivity so no more tuning is needed. 
 
-Let's calculate the cross-validation score to get a better practical accuracy.
+```{r}
+#ROC curve
+
+library(ROCR)
+predicted<- predict(b_mod, test)
+predicted
+?prediction
+prediction(as.numeric(predicted), as.numeric(test$diagnosis)) %>% 
+  performance (measur='tpr', x.measure= 'fpr') %>%plot
+```
+
+```{r}
+auc<- prediction(as.numeric(predicted), as.numeric(test$diagnosis)) %>% 
+  performance (measur='auc') %>% .@y.values
+
+cat("Area Under Curve: ",auc[[1]])
+
+```
+
+
+calculate the cross-validation score to get a better practical accuracy.
 
 ```{r}
 
