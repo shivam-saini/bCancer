@@ -10,7 +10,7 @@ knit: (function(input_file, encoding) {  out_dir <- 'docs';
 library(tidyverse)
 library(caret)
 library(e1071)
-
+library(ROCR)
 ```
 
 Let's read the data.
@@ -162,10 +162,7 @@ For diagnostic tests false-negative rate must be minimized over false-positive r
 ```{r}
 #ROC curve
 
-library(ROCR)
 predicted<- predict(b_mod, test)
-predicted
-?prediction
 prediction(as.numeric(predicted), as.numeric(test$diagnosis)) %>% 
   performance (measur='tpr', x.measure= 'fpr') %>%plot
 ```
